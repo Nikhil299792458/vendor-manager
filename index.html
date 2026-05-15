@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Local-first vendor intelligence and procurement management system with optional Google Drive sync." />
+    <meta name="theme-color" content="#1d4d4f" />
+    <title>Vendor Manager</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Mechanical Procurement</p>
+        <h1>Vendor Manager</h1>
+      </div>
+      <div class="header-actions">
+        <button id="authorizeDriveBtn" class="primary">Connect Google Drive</button>
+        <button id="saveDriveBtn">Save to Drive</button>
+        <button id="loadDriveBtn">Load from Drive</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar" aria-label="Main navigation">
+        <button class="nav-button active" data-view="dashboard">Dashboard</button>
+        <button class="nav-button" data-view="vendors">Vendors</button>
+        <button class="nav-button" data-view="rfqs">RFQs</button>
+        <button class="nav-button" data-view="compare">Compare</button>
+        <button class="nav-button" data-view="catalogues">Catalogues</button>
+        <button class="nav-button" data-view="documents">Documents</button>
+        <button class="nav-button" data-view="quotations">Quotations</button>
+        <button class="nav-button" data-view="interactions">Follow-ups</button>
+        <button class="nav-button" data-view="reminders">Reminders</button>
+        <button class="nav-button" data-view="scores">Scores</button>
+        <button class="nav-button" data-view="analytics">Analytics</button>
+        <button class="nav-button" data-view="importExport">Import / Export</button>
+        <button class="nav-button" data-view="drive">Google Drive</button>
+        <button class="nav-button" data-view="settings">Settings</button>
+      </aside>
+
+      <section class="content">
+        <div id="alert" class="alert hidden"></div>
+
+        <section id="dashboardView" class="view active">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Overview</p>
+              <h2>Dashboard</h2>
+            </div>
+          </div>
+          <div id="dashboardMetrics" class="metric-grid"></div>
+          <div class="two-column">
+            <article class="panel">
+              <h3>Top-rated Vendors</h3>
+              <div id="topVendors" class="card-list"></div>
+            </article>
+            <article class="panel">
+              <h3>Due Soon</h3>
+              <div id="dueWork" class="card-list"></div>
+            </article>
+          </div>
+          <div class="two-column dashboard-band">
+            <article class="panel">
+              <h3>Category Mix</h3>
+              <div id="categoryBars"></div>
+            </article>
+            <article class="panel">
+              <h3>Procurement Signals</h3>
+              <div id="procurementSignals" class="signal-grid"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="vendorsView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Database</p>
+              <h2>Vendors</h2>
+            </div>
+            <button id="newVendorBtn" class="primary">New Vendor</button>
+          </div>
+          <div class="filters">
+            <input id="vendorSearch" placeholder="Search company, tags, item, city, phone, GST" />
+            <select id="filterCategory"></select>
+            <select id="filterVendorType"></select>
+            <select id="filterStatus"></select>
+            <select id="filterLifecycle"></select>
+            <select id="sortVendors">
+              <option>Name</option>
+              <option>Category</option>
+              <option>Rating</option>
+              <option>Recently Updated</option>
+              <option>Lead Time</option>
+            </select>
+          </div>
+          <div class="split">
+            <div>
+              <div id="vendorList" class="card-list"></div>
+            </div>
+            <form id="vendorForm" class="panel sticky-form">
+              <h3 id="vendorFormTitle">Add Vendor</h3>
+              <input type="hidden" id="vendorId" />
+              <label>Company Name<input id="companyName" required /></label>
+              <div class="form-row">
+                <label>Vendor Type<select id="vendorType"></select></label>
+                <label>Primary Category<select id="category"></select></label>
+              </div>
+              <label>Tags / alternate categories<input id="tags" placeholder="PU tube; ferrule; SS fitting; regulator" /></label>
+              <label>Sub-category<input id="subCategory" /></label>
+              <label>Products / Services<textarea id="productsServices"></textarea></label>
+              <label>Brands Supplied<input id="brandsSupplied" placeholder="Swagelok type; Parker; Festo; custom" /></label>
+              <div class="form-row">
+                <label>City<input id="city" value="Bangalore" /></label>
+                <label>Area<input id="area" /></label>
+              </div>
+              <label>Full Address<textarea id="fullAddress"></textarea></label>
+              <div class="form-row">
+                <label>Phone<input id="phone" /></label>
+                <label>WhatsApp<input id="whatsapp" /></label>
+              </div>
+              <label>Email<input id="email" type="email" /></label>
+              <label>Website<input id="website" placeholder="https://example.com" /></label>
+              <div class="form-row">
+                <label>IndiaMart URL<input id="indiaMartUrl" /></label>
+                <label>Justdial URL<input id="justDialUrl" /></label>
+              </div>
+              <div class="form-row">
+                <label>GST Number<input id="gstNumber" /></label>
+                <label>Contact Person<input id="contactPerson" /></label>
+              </div>
+              <div class="form-row">
+                <label>Contact Role<input id="contactRole" placeholder="Sales, owner, service engineer" /></label>
+                <label>Typical Lead Time (days)<input id="typicalLeadTimeDays" type="number" min="0" /></label>
+              </div>
+              <div class="form-row">
+                <label>MOQ<input id="moq" /></label>
+                <label>Payment Terms<input id="paymentTerms" /></label>
+              </div>
+              <label>Technical Capabilities<textarea id="technicalCapabilities" placeholder="Tolerance, material, pressure range, calibration, fabrication limits"></textarea></label>
+              <div class="form-row">
+                <label>Verification Status<select id="verificationStatus"></select></label>
+                <label>Lifecycle Status<select id="lifecycleStatus"></select></label>
+              </div>
+              <label>Notes<textarea id="notes"></textarea></label>
+              <div id="duplicateWarning" class="warning hidden"></div>
+              <div class="form-actions">
+                <button type="submit" class="primary">Save Vendor</button>
+                <button type="button" id="resetVendorFormBtn">Clear</button>
+                <button type="button" id="deleteVendorBtn" class="danger hidden">Delete</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section id="vendorDetailView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Vendor record</p>
+              <h2 id="detailTitle">Vendor Detail</h2>
+            </div>
+            <div class="form-actions">
+              <button id="backToVendorsBtn">Back to Vendors</button>
+              <button id="detailEditBtn" class="primary">Edit</button>
+            </div>
+          </div>
+          <div id="vendorDetailContent"></div>
+        </section>
+
+        <section id="rfqsView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Procurement Workflow</p>
+              <h2>RFQ Manager</h2>
+            </div>
+          </div>
+          <form id="rfqForm" class="panel compact-form">
+            <div class="form-row">
+              <label>RFQ Title<input id="rfqTitle" required /></label>
+              <label>Category<select id="rfqCategory"></select></label>
+              <label>Status<select id="rfqStatus"></select></label>
+              <label>Due Date<input id="rfqDueDate" type="date" /></label>
+            </div>
+            <label>Item / Requirement<textarea id="rfqItemDescription" required></textarea></label>
+            <label>Invite Vendors<select id="rfqVendors" multiple size="6"></select></label>
+            <label>Remarks<textarea id="rfqRemarks"></textarea></label>
+            <button class="primary" type="submit">Save RFQ</button>
+          </form>
+          <div id="rfqList" class="card-list"></div>
+        </section>
+
+        <section id="compareView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Decision Support</p>
+              <h2>Quotation Comparison</h2>
+            </div>
+          </div>
+          <div class="panel compact-form">
+            <div class="form-row">
+              <label>RFQ<select id="compareRfq"></select></label>
+              <label>Item keyword<input id="compareItem" placeholder="pressure regulator, SS ferrule, sensor" /></label>
+            </div>
+          </div>
+          <div id="comparisonResult"></div>
+        </section>
+
+        <section id="cataloguesView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Files</p>
+              <h2>Catalogue Manager</h2>
+            </div>
+          </div>
+          <form id="catalogueForm" class="panel compact-form">
+            <div class="form-row">
+              <label>Vendor<select id="catalogueVendor"></select></label>
+              <label>Title<input id="catalogueTitle" required /></label>
+            </div>
+            <label>Catalogue URL<input id="catalogueUrl" /></label>
+            <label>Notes<textarea id="catalogueNotes"></textarea></label>
+            <label>Optional PDF/file upload to Drive<input id="catalogueFile" type="file" /></label>
+            <button class="primary" type="submit">Save Catalogue</button>
+          </form>
+          <div id="catalogueList" class="card-list"></div>
+        </section>
+
+        <section id="documentsView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Evidence</p>
+              <h2>Document Library</h2>
+            </div>
+          </div>
+          <form id="documentForm" class="panel compact-form">
+            <div class="form-row">
+              <label>Vendor<select id="documentVendor"></select></label>
+              <label>Document Type<select id="documentType"></select></label>
+              <label>Title<input id="documentTitle" required /></label>
+              <label>Valid Until<input id="documentValidUntil" type="date" /></label>
+            </div>
+            <label>Public URL<input id="documentUrl" placeholder="https://example.com/document.pdf" /></label>
+            <label>Upload to Drive<input id="documentFile" type="file" /></label>
+            <label>Notes<textarea id="documentNotes"></textarea></label>
+            <button class="primary" type="submit">Save Document</button>
+          </form>
+          <div id="documentList" class="card-list"></div>
+        </section>
+
+        <section id="quotationsView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Pricing</p>
+              <h2>Quotation Tracker</h2>
+            </div>
+          </div>
+          <form id="quotationForm" class="panel compact-form">
+            <div class="form-row">
+              <label>RFQ<select id="quotationRfq"></select></label>
+              <label>Vendor<select id="quotationVendor"></select></label>
+              <label>Item Name<input id="itemName" required /></label>
+            </div>
+            <label>Specification<textarea id="specification"></textarea></label>
+            <div class="form-row">
+              <label>Quantity<input id="quantity" type="number" step="0.01" value="1" /></label>
+              <label>Unit Price<input id="quotedPrice" type="number" step="0.01" /></label>
+              <label>Currency<input id="currency" value="INR" /></label>
+              <label>Lead Days<input id="leadTimeDays" type="number" /></label>
+            </div>
+            <div class="form-row">
+              <label>GST %<input id="gstPercent" type="number" step="0.01" value="18" /></label>
+              <label>Shipping Cost<input id="shippingCost" type="number" step="0.01" value="0" /></label>
+              <label>Delay Penalty<input id="delayPenalty" type="number" step="0.01" value="0" /></label>
+              <label>Validity Date<input id="validityDate" type="date" /></label>
+            </div>
+            <div class="form-row">
+              <label>Warranty<input id="warranty" placeholder="1 year, none, as per OEM" /></label>
+              <label>Payment Terms<input id="quotationPaymentTerms" /></label>
+              <label>Decision<input id="finalDecision" placeholder="Preferred, slow, rejected, wait" /></label>
+            </div>
+            <label>Quotation File<input id="quotationFile" type="file" /></label>
+            <label>Remarks<textarea id="quotationRemarks"></textarea></label>
+            <button class="primary" type="submit">Save Quotation</button>
+          </form>
+          <div id="quotationList" class="card-list"></div>
+        </section>
+
+        <section id="interactionsView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Communication</p>
+              <h2>Interactions & Follow-ups</h2>
+            </div>
+          </div>
+          <form id="interactionForm" class="panel compact-form">
+            <div class="form-row">
+              <label>Vendor<select id="interactionVendor"></select></label>
+              <label>Mode<select id="interactionMode"></select></label>
+              <label>Status<select id="interactionStatus"></select></label>
+            </div>
+            <label>Summary<textarea id="interactionSummary" required></textarea></label>
+            <label>Next Action<input id="nextAction" /></label>
+            <label>Follow-up Date<input id="followupDate" type="date" /></label>
+            <button class="primary" type="submit">Save Interaction</button>
+          </form>
+          <div id="interactionList" class="card-list"></div>
+        </section>
+
+        <section id="remindersView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Reminders</p>
+              <h2>Reminder Tracker</h2>
+            </div>
+          </div>
+          <form id="reminderForm" class="panel compact-form">
+            <div class="form-row">
+              <label>Vendor<select id="reminderVendor"></select></label>
+              <label>Priority<select id="reminderPriority"></select></label>
+              <label>Status<select id="reminderStatus"><option>Pending</option><option>Done</option><option>Snoozed</option></select></label>
+              <label>Due Date<input id="reminderDueDate" type="date" required /></label>
+            </div>
+            <label>Title<input id="reminderTitle" required /></label>
+            <label>Notes<textarea id="reminderNotes"></textarea></label>
+            <button class="primary" type="submit">Save Reminder</button>
+          </form>
+          <div id="reminderList" class="card-list"></div>
+        </section>
+
+        <section id="scoresView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Rating</p>
+              <h2>Vendor Scoring</h2>
+            </div>
+          </div>
+          <form id="scoreForm" class="panel compact-form">
+            <label>Vendor<select id="scoreVendor"></select></label>
+            <div id="scoreInputs" class="score-grid"></div>
+            <label>Comments<textarea id="scoreComments"></textarea></label>
+            <h3>Overall Score: <span id="overallScore">0.00</span></h3>
+            <button class="primary" type="submit">Save Score</button>
+          </form>
+        </section>
+
+        <section id="analyticsView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Analytics</p>
+              <h2>Procurement Analytics</h2>
+            </div>
+          </div>
+          <div id="analyticsPanels" class="analytics-grid"></div>
+        </section>
+
+        <section id="importExportView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Portability</p>
+              <h2>Import / Export</h2>
+            </div>
+          </div>
+          <div class="two-column">
+            <article class="panel">
+              <h3>Import</h3>
+              <label>Vendor CSV<input id="importVendorCsv" type="file" accept=".csv,text/csv" /></label>
+              <button id="importCsvBtn">Import Vendors CSV</button>
+              <label>Full JSON Database<input id="importJsonFile" type="file" accept=".json,application/json" /></label>
+              <button id="importJsonBtn">Import JSON Backup</button>
+            </article>
+            <article class="panel">
+              <h3>Export</h3>
+              <div class="button-stack">
+                <button id="exportJsonBtn">Export JSON Backup</button>
+                <button id="exportVendorCsvBtn">Export Vendors CSV</button>
+                <button id="exportQuotationCsvBtn">Export Quotations CSV</button>
+                <button id="exportRfqCsvBtn">Export RFQs CSV</button>
+                <button id="exportReminderCsvBtn">Export Reminders CSV</button>
+                <button id="exportMarkdownBtn">Export Category Markdown</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="driveView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Cloud Sync</p>
+              <h2>Google Drive</h2>
+            </div>
+          </div>
+          <div class="two-column">
+            <article class="panel">
+              <h3>Drive Connection</h3>
+              <p>Use your own Google OAuth Client ID. The app stores one JSON database file in Google Drive.</p>
+              <label>OAuth Client ID<input id="googleClientId" placeholder="xxxx.apps.googleusercontent.com" /></label>
+              <button id="saveClientIdBtn">Save Client ID</button>
+              <button id="driveAuthBtn" class="primary">Authorize Google Drive</button>
+              <p id="driveStatus" class="muted">Not connected.</p>
+            </article>
+            <article class="panel">
+              <h3>Database File</h3>
+              <label>Drive File ID<input id="driveFileId" placeholder="Leave blank to create a new file" /></label>
+              <div class="button-stack">
+                <button id="createDriveFileBtn">Create New Drive Database</button>
+                <button id="saveDriveFileBtn" class="primary">Save Current Data to Drive</button>
+                <button id="loadDriveFileBtn">Load Data from Drive</button>
+                <button id="listDriveFilesBtn">Find Vendor Manager Files</button>
+              </div>
+              <div id="driveFiles" class="card-list"></div>
+            </article>
+          </div>
+          <article class="panel">
+            <h3>Share With Friends</h3>
+            <p>Share the Drive database file with a friend. They can paste the same file ID and load it in their website.</p>
+            <div class="form-row">
+              <label>Email<input id="shareEmail" type="email" /></label>
+              <label>Permission<select id="shareRole"><option value="reader">Reader</option><option value="writer">Writer</option></select></label>
+            </div>
+            <button id="shareDriveBtn">Share Drive File</button>
+          </article>
+        </section>
+
+        <section id="settingsView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Configuration</p>
+              <h2>Settings</h2>
+            </div>
+          </div>
+          <form id="settingsForm" class="panel">
+            <div class="two-column">
+              <label>Categories<textarea id="settingsCategories"></textarea></label>
+              <label>Vendor Types<textarea id="settingsVendorTypes"></textarea></label>
+            </div>
+            <div class="two-column">
+              <label>Verification Statuses<textarea id="settingsVerificationStatuses"></textarea></label>
+              <label>Lifecycle Statuses<textarea id="settingsLifecycleStatuses"></textarea></label>
+            </div>
+            <div class="two-column">
+              <label>RFQ Statuses<textarea id="settingsRfqStatuses"></textarea></label>
+              <label>Document Types<textarea id="settingsDocumentTypes"></textarea></label>
+            </div>
+            <h3>Score Weights</h3>
+            <div id="settingsWeights" class="score-grid"></div>
+            <button class="primary" type="submit">Save Settings</button>
+          </form>
+          <article class="panel dashboard-band">
+            <h3>Audit History</h3>
+            <div id="auditList" class="card-list"></div>
+          </article>
+        </section>
+      </section>
+    </main>
+
+    <template id="emptyTemplate">
+      <p class="empty">No records yet.</p>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
