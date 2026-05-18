@@ -434,6 +434,7 @@ function validateVendor(vendor) {
 function editVendor(id) {
   const vendor = db.vendors.find((item) => item.id === id);
   if (!vendor) return;
+  document.getElementById("vendorId").value = vendor.id;
   Object.entries(vendor).forEach(([key, val]) => {
     const field = document.getElementById(key);
     if (field) field.value = val ?? "";
@@ -445,7 +446,12 @@ function editVendor(id) {
 
 function deleteSelectedVendor() {
   const id = value("vendorId");
-  if (!id || !confirm("Delete this vendor and linked records from local database?")) return;
+  deleteVendorById(id);
+}
+
+function deleteVendorById(id) {
+  if (!id) return showAlert("Choose a vendor to delete first.", "error");
+  if (!confirm(`Delete ${vendorName(id)} and linked records from local database?`)) return;
   const label = vendorName(id);
   db.vendors = db.vendors.filter((item) => item.id !== id);
   db.catalogues = db.catalogues.filter((item) => item.vendorId !== id);
@@ -459,8 +465,11 @@ function deleteSelectedVendor() {
   });
   audit("Deleted", "Vendor", label);
   saveLocal();
+  if (currentDetailVendorId === id) currentDetailVendorId = "";
   resetVendorForm();
   renderAll();
+  showView("vendors");
+  showAlert("Vendor deleted.", "success");
 }
 
 function resetVendorForm() {
@@ -546,6 +555,7 @@ function sortVendors(vendors, sort) {
 function bindDetailActions() {
   on("backToVendorsBtn", "click", () => showView("vendors"));
   on("detailEditBtn", "click", () => currentDetailVendorId && editVendor(currentDetailVendorId));
+  on("detailDeleteBtn", "click", () => currentDetailVendorId && deleteVendorById(currentDetailVendorId));
 }
 
 function renderVendorDetail(id) {
