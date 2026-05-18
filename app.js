@@ -451,7 +451,14 @@ function deleteSelectedVendor() {
 
 function deleteVendorById(id) {
   if (!id) return showAlert("Choose a vendor to delete first.", "error");
-  if (!confirm(`Delete ${vendorName(id)} and linked records from local database?`)) return;
+  const linkedCount = linkedRecordCount(id);
+  const message = [
+    `Are you sure you want to delete "${vendorName(id)}"?`,
+    "",
+    `This will also delete ${linkedCount} linked record${linkedCount === 1 ? "" : "s"} from this local database.`,
+    "This action cannot be undone unless you restore from a backup."
+  ].join("\n");
+  if (!confirm(message)) return;
   const label = vendorName(id);
   db.vendors = db.vendors.filter((item) => item.id !== id);
   db.catalogues = db.catalogues.filter((item) => item.vendorId !== id);
@@ -515,6 +522,7 @@ function renderVendors() {
       <div class="form-actions">
         <button data-detail="${vendor.id}">Details</button>
         <button data-edit="${vendor.id}">Edit</button>
+        <button class="danger" data-delete-vendor="${vendor.id}">Delete</button>
         ${vendor.website ? `<a href="${escapeAttr(normalizeUrl(vendor.website))}" target="_blank" rel="noreferrer"><button>Website</button></a>` : ""}
       </div>
     `));
@@ -524,6 +532,9 @@ function renderVendors() {
   });
   list.querySelectorAll("[data-detail]").forEach((button) => {
     button.addEventListener("click", () => renderVendorDetail(button.dataset.detail));
+  });
+  list.querySelectorAll("[data-delete-vendor]").forEach((button) => {
+    button.addEventListener("click", () => deleteVendorById(button.dataset.deleteVendor));
   });
 }
 
@@ -555,7 +566,14 @@ function sortVendors(vendors, sort) {
 function bindDetailActions() {
   on("backToVendorsBtn", "click", () => showView("vendors"));
   on("detailEditBtn", "click", () => currentDetailVendorId && editVendor(currentDetailVendorId));
+  on("detailWebsiteBtn", "click", () => openCurrentVendorWebsite());
   on("detailDeleteBtn", "click", () => currentDetailVendorId && deleteVendorById(currentDetailVendorId));
+}
+
+function openCurrentVendorWebsite() {
+  const vendor = db.vendors.find((item) => item.id === currentDetailVendorId);
+  if (!vendor?.website) return showAlert("No website saved for this vendor.", "error");
+  window.open(normalizeUrl(vendor.website), "_blank", "noopener,noreferrer");
 }
 
 function renderVendorDetail(id) {
@@ -1544,6 +1562,17 @@ function landedCost(quote) {
   const base = Number(quote.quotedPrice || 0) * Number(quote.quantity || 1);
   const gst = base * (Number(quote.gstPercent || 0) / 100);
   return base + gst + Number(quote.shippingCost || 0) + Number(quote.delayPenalty || 0);
+}
+
+function linkedRecordCount(vendorId) {
+  return [
+    db.catalogues,
+    db.documents,
+    db.quotations,
+    db.interactions,
+    db.reminders,
+    db.scores
+  ].reduce((count, rows) => count + rows.filter((item) => item.vendorId === vendorId).length, 0);
 }
 
 function advanceVendorLifecycle(vendorId, targetStatus) {
