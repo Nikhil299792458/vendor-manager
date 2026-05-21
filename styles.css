@@ -317,6 +317,22 @@ label {
   gap: 10px;
 }
 
+.ocr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.raw-text {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: #f9fbfa;
+  white-space: pre-wrap;
+}
+
 .dashboard-band {
   margin-top: 16px;
 }

@@ -48,6 +48,7 @@ npm run check
 ## What Is Implemented
 
 - Vendor CRUD with richer fields: tags, brands, GST, lifecycle status, technical capabilities, MOQ, lead time, payment terms.
+- Business card image OCR entry directly in the web app using browser-side Tesseract.js, with an editable review step before saving.
 - Vendor detail page with contact actions, linked catalogues, documents, quotations, interactions, reminders, and latest score.
 - Fuzzy-ish search across company, products, tags, city, phone, email, GST, and technical notes.
 - Duplicate warning using phone, email, GST, website domain, and similar company name.
@@ -80,6 +81,14 @@ companyName,vendorType,category,tags,productsServices,city,area,phone,email,webs
 ```
 
 Export a vendor CSV first if you want a clean template.
+
+## Business Card OCR
+
+Go to **Business Card OCR**, upload a card image, click **Extract Details**, review/correct the fields, then click **Save Verified Vendor**.
+
+OCR runs inside the browser using Tesseract.js from a CDN. You do not need Python, OpenCV, or a local helper server. The first OCR run can take time because the browser downloads the OCR worker, WebAssembly core, and English language data.
+
+The card image is processed in the browser. The extracted vendor record is saved only after you review the fields and click **Save Verified Vendor**.
 
 ## Google Drive Setup
 
@@ -163,6 +172,7 @@ firebase deploy --only hosting
 
 - Static hosting cannot enforce secure app-level user roles. Google Drive sharing controls file access, but true role-based permissions require a backend such as Firestore, Supabase, or a custom server.
 - Browser link checks are limited by CORS. Some valid vendor sites will show `Unknown`.
+- Business card OCR depends on loading Tesseract.js assets from a CDN, so it needs internet access at least on first use and can be slower on low-power devices.
 - `localStorage` is practical for a small to medium procurement database. A future IndexedDB version would be better for very large attachment metadata and history.
 - The app does not scrape IndiaMart, Justdial, or vendor websites.
 - Keep JSON backups before large imports, shared edits, or schema changes.

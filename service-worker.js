@@ -1,4 +1,4 @@
-const CACHE_NAME = "vendor-manager-v2";
+const CACHE_NAME = "vendor-manager-v4";
 const ASSETS = [
   "./",
   "./index.html",

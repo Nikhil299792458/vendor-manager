@@ -9,6 +9,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/6.0.1/tesseract.min.js" defer></script>
   </head>
   <body>
     <header class="app-header">
@@ -27,6 +28,7 @@
       <aside class="sidebar" aria-label="Main navigation">
         <button class="nav-button active" data-view="dashboard">Dashboard</button>
         <button class="nav-button" data-view="vendors">Vendors</button>
+        <button class="nav-button" data-view="businessCard">Business Card OCR</button>
         <button class="nav-button" data-view="rfqs">RFQs</button>
         <button class="nav-button" data-view="compare">Compare</button>
         <button class="nav-button" data-view="catalogues">Catalogues</button>
@@ -169,6 +171,49 @@
             </div>
           </div>
           <div id="vendorDetailContent"></div>
+        </section>
+
+        <section id="businessCardView" class="view">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">OCR Assisted Entry</p>
+              <h2>Business Card OCR</h2>
+            </div>
+          </div>
+          <div class="two-column">
+            <article class="panel compact-form">
+              <h3>Upload Card Image</h3>
+              <p class="muted">Upload a business card image. OCR runs in this web page using Tesseract.js, then you review the extracted fields before saving.</p>
+              <label>Business card image<input id="ocrCardImage" type="file" accept="image/*" /></label>
+              <div class="form-actions">
+                <button id="extractBusinessCardBtn" class="primary">Extract Details</button>
+                <button id="clearOcrBtn">Clear</button>
+              </div>
+              <p id="ocrStatus" class="muted">Waiting for an image.</p>
+            </article>
+            <article class="panel">
+              <h3>How It Works</h3>
+              <p>The image is processed by your browser. The OCR engine and English language model are loaded from a CDN, so the first run may take a little time.</p>
+              <p class="muted">OCR is never final by itself. Correct the review fields before clicking Save Verified Vendor.</p>
+            </article>
+          </div>
+          <article id="ocrReviewPanel" class="panel dashboard-band hidden">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Review Before Saving</p>
+                <h2>Extracted Vendor Fields</h2>
+              </div>
+              <div class="form-actions">
+                <button id="copyOcrToVendorFormBtn">Copy to Vendor Form</button>
+                <button id="saveOcrVendorBtn" class="primary">Save Verified Vendor</button>
+              </div>
+            </div>
+            <div id="ocrReviewFields" class="ocr-grid"></div>
+            <details class="dashboard-band">
+              <summary>Raw OCR text</summary>
+              <pre id="ocrRawText" class="raw-text"></pre>
+            </details>
+          </article>
         </section>
 
         <section id="rfqsView" class="view">

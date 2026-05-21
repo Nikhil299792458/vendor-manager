@@ -41,14 +41,70 @@ const scoreLabels = {
   catalogueAvailabilityScore: "Catalogue Availability"
 };
 
+const vendorColumns = [
+  "companyName",
+  "vendorType",
+  "category",
+  "subCategory",
+  "tags",
+  "productsServices",
+  "brandsSupplied",
+  "city",
+  "area",
+  "fullAddress",
+  "phone",
+  "whatsapp",
+  "email",
+  "website",
+  "gstNumber",
+  "contactPerson",
+  "contactRole",
+  "typicalLeadTimeDays",
+  "moq",
+  "paymentTerms",
+  "technicalCapabilities",
+  "verificationStatus",
+  "lifecycleStatus",
+  "notes"
+];
+
+const vendorColumnLabels = {
+  companyName: "Company Name",
+  vendorType: "Vendor Type",
+  category: "Category",
+  subCategory: "Sub-category",
+  tags: "Tags",
+  productsServices: "Products / Services",
+  brandsSupplied: "Brands Supplied",
+  city: "City",
+  area: "Area",
+  fullAddress: "Full Address",
+  phone: "Phone",
+  whatsapp: "WhatsApp",
+  email: "Email",
+  website: "Website",
+  gstNumber: "GST Number",
+  contactPerson: "Contact Person",
+  contactRole: "Contact Role",
+  typicalLeadTimeDays: "Typical Lead Time Days",
+  moq: "MOQ",
+  paymentTerms: "Payment Terms",
+  technicalCapabilities: "Technical Capabilities",
+  verificationStatus: "Verification Status",
+  lifecycleStatus: "Lifecycle Status",
+  notes: "Notes"
+};
+
 let db = loadDb();
 let accessToken = "";
 let tokenClient = null;
 let currentDetailVendorId = "";
+let ocrExtractedRecord = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   bindNavigation();
   bindVendorForm();
+  bindBusinessCardOcr();
   bindRfqForm();
   bindComparison();
   bindCatalogueForm();
@@ -431,14 +487,21 @@ function validateVendor(vendor) {
   return "";
 }
 
+function setVendorFormFromRecord(record) {
+  vendorColumns.forEach((key) => {
+    const field = document.getElementById(key);
+    if (field) field.value = record[key] ?? "";
+  });
+  document.getElementById("vendorId").value = record.id || "";
+  document.getElementById("vendorFormTitle").textContent = record.id ? "Edit Vendor" : "Add Vendor";
+  document.getElementById("deleteVendorBtn").classList.toggle("hidden", !record.id);
+}
+
 function editVendor(id) {
   const vendor = db.vendors.find((item) => item.id === id);
   if (!vendor) return;
   document.getElementById("vendorId").value = vendor.id;
-  Object.entries(vendor).forEach(([key, val]) => {
-    const field = document.getElementById(key);
-    if (field) field.value = val ?? "";
-  });
+  setVendorFormFromRecord(vendor);
   document.getElementById("vendorFormTitle").textContent = "Edit Vendor";
   document.getElementById("deleteVendorBtn").classList.remove("hidden");
   showView("vendors");
@@ -486,6 +549,431 @@ function resetVendorForm() {
   document.getElementById("vendorFormTitle").textContent = "Add Vendor";
   document.getElementById("deleteVendorBtn").classList.add("hidden");
   document.getElementById("duplicateWarning").classList.add("hidden");
+}
+
+function bindBusinessCardOcr() {
+  on("extractBusinessCardBtn", "click", extractBusinessCardImage);
+  on("clearOcrBtn", "click", clearOcrReview);
+  on("copyOcrToVendorFormBtn", "click", copyOcrToVendorForm);
+  on("saveOcrVendorBtn", "click", saveOcrVendor);
+}
+
+async function extractBusinessCardImage() {
+  const file = document.getElementById("ocrCardImage").files[0];
+  if (!file) return showAlert("Choose a business card image first.", "error");
+  if (!window.Tesseract?.recognize) return showAlert("Tesseract.js has not loaded yet. Check your internet connection and reload.", "error");
+  setOcrStatus("Preparing image for browser OCR...");
+  try {
+    const image = await prepareBusinessCardImage(file);
+    setOcrStatus("Running OCR in your browser...");
+    const result = await Tesseract.recognize(image, "eng", {
+      logger: (progress) => updateOcrProgress(progress)
+    });
+    const text = normalizeOcrText(result.data?.text || "");
+    const record = extractBusinessCardFields(text);
+    const payload = { record, rawText: text, rawLines: getCleanOcrLines(text) };
+    ocrExtractedRecord = prepareOcrRecord(payload.record);
+    renderOcrReview(payload);
+    setOcrStatus("Extraction complete. Review every field before saving.");
+    showAlert("OCR extraction complete. Please verify before saving.", "success");
+  } catch (error) {
+    setOcrStatus("OCR extraction failed.");
+    showAlert(`Could not extract card: ${error.message}`, "error");
+  }
+}
+
+function updateOcrProgress(progress) {
+  const status = progress.status ? progress.status.replace(/_/g, " ") : "working";
+  const percent = Number(progress.progress || 0);
+  setOcrStatus(`${status}: ${Math.round(percent * 100)}%`);
+}
+
+async function prepareBusinessCardImage(file) {
+  const img = await loadImage(file);
+  const targetWidth = 1800;
+  const scale = img.naturalWidth && img.naturalWidth < targetWidth ? targetWidth / img.naturalWidth : 1;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.naturalWidth * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    const contrast = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
+    data[i] = contrast;
+    data[i + 1] = contrast;
+    data[i + 2] = contrast;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  URL.revokeObjectURL(img.dataset.objectUrl);
+  return canvas;
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      img.dataset.objectUrl = objectUrl;
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Could not load selected image."));
+    };
+    img.src = objectUrl;
+  });
+}
+
+function extractBusinessCardFields(text) {
+  const lines = getCleanOcrLines(text);
+  const emails = extractOcrEmails(text);
+  const phones = extractOcrPhones(text);
+  const websites = extractOcrWebsites(lines, emails);
+  const contactRole = extractOcrContactRole(lines);
+  const contactPerson = extractOcrContactPerson(lines, contactRole);
+  const companyName = extractOcrCompanyName(lines);
+  const location = extractOcrCityAndArea(lines, text);
+  const inferred = inferOcrCategory(text);
+  const address = extractOcrAddress(lines);
+  const record = Object.fromEntries(vendorColumns.map((key) => [key, ""]));
+  record.companyName = companyName;
+  record.vendorType = inferred.vendorType || "Supplier";
+  record.category = inferred.category;
+  record.subCategory = inferred.subCategory;
+  record.tags = inferred.tags;
+  record.productsServices = inferred.productsServices;
+  record.brandsSupplied = inferred.brandsSupplied;
+  record.city = location.city;
+  record.area = location.area;
+  record.fullAddress = address.fullAddress;
+  record.phone = phones[0] || "";
+  record.whatsapp = phones[0] || "";
+  record.email = emails[0] || "";
+  record.website = websites[0] || "";
+  record.gstNumber = extractOcrGstNumber(text);
+  record.contactPerson = contactPerson;
+  record.contactRole = contactRole;
+  record.verificationStatus = "Needs Followup";
+  record.lifecycleStatus = "New Vendor";
+  record.notes = [
+    address.notes,
+    "OCR extracted in browser from business card. Verify before use.",
+    companyName ? "" : "Company name may need manual entry."
+  ].filter(Boolean).join("\n");
+  return record;
+}
+
+function normalizeOcrText(text) {
+  return String(text || "")
+    .replace(/\r/g, "\n")
+    .replace(/\s*@\s*/g, "@")
+    .replace(/\s*\.\s*/g, ".")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
+function getCleanOcrLines(text) {
+  return uniquePreserveOrder(
+    String(text || "")
+      .split(/\n+/)
+      .map((line) => line.trim().replace(/^[-:;,. ]+|[-:;,. ]+$/g, "").replace(/\s+/g, " "))
+      .filter((line) => line.length >= 2)
+  );
+}
+
+function uniquePreserveOrder(items) {
+  const seen = new Set();
+  const output = [];
+  items.forEach((item) => {
+    const key = String(item || "").toLowerCase().trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    output.push(item);
+  });
+  return output;
+}
+
+function extractOcrEmails(text) {
+  return uniquePreserveOrder(String(text || "").match(/\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b/gi) || []);
+}
+
+function extractOcrWebsites(lines, emails) {
+  const emailDomains = new Set(emails.map((email) => email.split("@").pop().toLowerCase()));
+  const websites = [];
+  const urlRegex = /\b(?:https?:\/\/)?(?:www\.)?[A-Z0-9\-]+(?:\.[A-Z0-9\-]+)+\/?\b/gi;
+  lines.forEach((line) => {
+    if (line.includes("@")) return;
+    const matches = line.match(urlRegex) || [];
+    matches.forEach((match) => {
+      const candidate = match.trim().replace(/[.,;:]$/g, "");
+      if (emailDomains.has(candidate.toLowerCase())) return;
+      if (candidate.startsWith("www.") || candidate.startsWith("http")) websites.push(candidate);
+    });
+  });
+  return uniquePreserveOrder(websites);
+}
+
+function extractOcrPhones(text) {
+  const phones = [];
+  const phoneRegex = /(?:\+?\d{1,3}[\s-]*)?(?:\d[\s-]*){8,12}/g;
+  (String(text || "").match(phoneRegex) || []).forEach((raw) => {
+    const digitsOnly = raw.replace(/\D/g, "");
+    if (digitsOnly.length === 10) phones.push("+91" + digitsOnly);
+    else if (digitsOnly.length === 12 && digitsOnly.startsWith("91")) phones.push("+" + digitsOnly);
+    else if (digitsOnly.length > 7 && raw.trim().startsWith("+")) phones.push("+" + digitsOnly);
+  });
+  return uniquePreserveOrder(phones);
+}
+
+function extractOcrGstNumber(text) {
+  const match = String(text || "").match(/\b[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/i);
+  return match ? match[0].toUpperCase() : "";
+}
+
+function extractOcrContactRole(lines) {
+  const roleKeywords = [
+    "account manager",
+    "sales manager",
+    "regional manager",
+    "area manager",
+    "business manager",
+    "product manager",
+    "application specialist",
+    "technical specialist",
+    "field engineer",
+    "sales engineer",
+    "director",
+    "proprietor",
+    "owner",
+    "manager",
+    "engineer",
+    "executive"
+  ];
+  return lines.find((line) => roleKeywords.some((keyword) => line.toLowerCase().includes(keyword))) || "";
+}
+
+function extractOcrContactPerson(lines, contactRole) {
+  if (contactRole && lines.includes(contactRole)) {
+    const index = lines.indexOf(contactRole);
+    for (let i = index - 1; i >= Math.max(0, index - 4); i--) {
+      if (looksLikePersonName(lines[i])) return lines[i];
+    }
+  }
+  return lines.find(looksLikePersonName) || "";
+}
+
+function looksLikePersonName(line) {
+  const lower = String(line || "").toLowerCase();
+  const rejectWords = [
+    "scientific", "technologies", "technology", "solutions", "services", "private", "pvt",
+    "ltd", "limited", "mobile", "phone", "email", "www", "india", "bengaluru",
+    "bangalore", "road", "place", "manager", "engineer", "supplier", "manufacturer"
+  ];
+  if (rejectWords.some((word) => lower.includes(word))) return false;
+  if (/\d/.test(line)) return false;
+  const words = String(line || "").split(/\s+/).filter(Boolean);
+  return words.length >= 2 && words.length <= 5 && words.every((word) => /^[A-Za-z.]+$/.test(word));
+}
+
+function extractOcrCompanyName(lines) {
+  const orgKeywords = [
+    "scientific", "industries", "industry", "technologies", "technology", "systems",
+    "corporation", "company", "enterprises", "traders", "distributors", "bioservices",
+    "bio services", "pvt", "private", "ltd", "limited", "llp", "inc", "solutions",
+    "engineering", "manufacturing", "fabrication", "tools", "automation"
+  ];
+  const rejectKeywords = [
+    "mobile", "phone", "email", "www", "account manager", "manager", "bengaluru",
+    "bangalore", "india", "road", "place", "whitefield"
+  ];
+  const candidates = lines.filter((line) => {
+    const lower = line.toLowerCase();
+    return !rejectKeywords.some((word) => lower.includes(word)) &&
+      orgKeywords.some((word) => lower.includes(word));
+  });
+  if (candidates.length) return uniquePreserveOrder(candidates).slice(0, 3).join(" | ");
+  return lines.find((line) => !looksLikePersonName(line) && !/\d/.test(line) && !line.includes("@") && !/^www\./i.test(line)) || "";
+}
+
+function extractOcrCityAndArea(lines, text) {
+  const cityPatterns = {
+    bengaluru: "Bengaluru",
+    bangalore: "Bengaluru",
+    mumbai: "Mumbai",
+    pune: "Pune",
+    chennai: "Chennai",
+    hyderabad: "Hyderabad",
+    delhi: "Delhi",
+    "new delhi": "New Delhi",
+    kolkata: "Kolkata",
+    ahmedabad: "Ahmedabad"
+  };
+  const lowerText = String(text || "").toLowerCase();
+  const cityKey = Object.keys(cityPatterns).find((key) => lowerText.includes(key));
+  const city = cityKey ? cityPatterns[cityKey] : "";
+  const areaKeywords = [
+    "whitefield", "epip", "electronic city", "peenya", "jayanagar", "indiranagar",
+    "koramangala", "rajajinagar", "yeshwanthpur", "bommasandra", "jigani", "sp road"
+  ];
+  let area = lines.find((line) => areaKeywords.some((keyword) => line.toLowerCase().includes(keyword))) || "";
+  area = area.replace(/\b\d{6}\b/g, "").replace(/\bIndia\b/gi, "").replace(city, "").trim().replace(/^[,;-]+|[,;-]+$/g, "");
+  return { city, area };
+}
+
+function inferOcrCategory(text) {
+  const lower = String(text || "").toLowerCase();
+  const rules = [
+    ["Pneumatics", ["pneumatic", "pu tube", "frl", "solenoid", "air cylinder", "ferrule", "regulator"]],
+    ["Hydraulics", ["hydraulic", "hose", "bsp", "valve", "clamp"]],
+    ["Bearings", ["bearing", "pillow block", "linear bearing"]],
+    ["Fasteners", ["fastener", "screw", "bolt", "washer", "circlip", "threaded insert"]],
+    ["CNC Machining", ["cnc", "machining", "turning", "milling", "fixture", "tolerance"]],
+    ["Laser Cutting", ["laser cutting", "laser cut"]],
+    ["Sheet Metal", ["sheet metal", "bending", "powder coating", "enclosure"]],
+    ["Sensors", ["sensor", "thermocouple", "transducer", "daq", "flow meter", "pressure gauge"]],
+    ["Lab Equipment", ["laboratory", "lab equipment", "calibration", "burner", "life sciences"]],
+    ["Custom Fabrication", ["fabrication", "welding", "prototype", "custom"]]
+  ];
+  const categoryRule = rules.find(([, keywords]) => keywords.some((keyword) => lower.includes(keyword)));
+  const category = categoryRule ? categoryRule[0] : "";
+  const tags = [];
+  const brands = [];
+  ["thermo fisher", "invitrogen", "parker", "festo", "smc", "bosch rexroth", "swagelok"].forEach((brand) => {
+    if (lower.includes(brand)) {
+      const label = brand.replace(/\b\w/g, (ch) => ch.toUpperCase());
+      brands.push(label);
+      tags.push(label);
+    }
+  });
+  if (category) tags.push(category);
+  return {
+    vendorType: "",
+    category,
+    subCategory: category ? `${category} supplier` : "",
+    productsServices: category || "",
+    brandsSupplied: uniquePreserveOrder(brands).join(", "),
+    tags: uniquePreserveOrder(tags).join(", ")
+  };
+}
+
+function extractOcrAddress(lines) {
+  const addressKeywords = [
+    "road", "street", "place", "phase", "layout", "industrial", "estate", "epip",
+    "whitefield", "bengaluru", "bangalore", "india", "nagar", "cross", "main"
+  ];
+  const addressLines = uniquePreserveOrder(lines.filter((line) => {
+    const lower = line.toLowerCase();
+    return addressKeywords.some((keyword) => lower.includes(keyword)) || /\b\d{6}\b/.test(line);
+  }));
+  return {
+    fullAddress: addressLines.join("; "),
+    notes: addressLines.length ? "Address extracted from card: " + addressLines.join("; ") : ""
+  };
+}
+
+function prepareOcrRecord(record) {
+  const prepared = normalizeVendor({
+    ...Object.fromEntries(vendorColumns.map((key) => [key, record[key] || ""])),
+    vendorType: record.vendorType || "Supplier",
+    verificationStatus: normalizeOcrStatus(record.verificationStatus),
+    lifecycleStatus: normalizeOcrLifecycle(record.lifecycleStatus),
+    notes: [record.notes, "OCR extracted from business card. Manually verified before saving: pending."].filter(Boolean).join("\n")
+  });
+  prepared.id = "";
+  return prepared;
+}
+
+function normalizeOcrStatus(status) {
+  if (db.settings.verificationStatuses.includes(status)) return status;
+  return "Needs Followup";
+}
+
+function normalizeOcrLifecycle(status) {
+  if (db.settings.lifecycleStatuses.includes(status)) return status;
+  if (String(status || "").toLowerCase() === "new") return "New Vendor";
+  return "New Vendor";
+}
+
+function renderOcrReview(result = {}) {
+  const panel = document.getElementById("ocrReviewPanel");
+  const fields = document.getElementById("ocrReviewFields");
+  const raw = document.getElementById("ocrRawText");
+  panel.classList.remove("hidden");
+  fields.innerHTML = "";
+  vendorColumns.forEach((key) => {
+    const label = document.createElement("label");
+    label.textContent = vendorColumnLabels[key] || key;
+    const input = ["productsServices", "technicalCapabilities", "notes"].includes(key)
+      ? document.createElement("textarea")
+      : document.createElement("input");
+    input.dataset.ocrField = key;
+    input.value = ocrExtractedRecord?.[key] ?? "";
+    label.appendChild(input);
+    fields.appendChild(label);
+  });
+  raw.textContent = result.rawText || result._rawOCRText || ocrExtractedRecord?._rawOCRText || "";
+}
+
+function readOcrReviewRecord() {
+  const record = {};
+  document.querySelectorAll("[data-ocr-field]").forEach((field) => {
+    record[field.dataset.ocrField] = field.value.trim();
+  });
+  return prepareOcrRecord(record);
+}
+
+function copyOcrToVendorForm() {
+  if (!ocrExtractedRecord) return showAlert("Extract a business card first.", "error");
+  const record = readOcrReviewRecord();
+  ensureOptionValues(record);
+  populateStaticOptions();
+  setVendorFormFromRecord(record);
+  showView("vendors");
+  showAlert("Copied OCR fields to the vendor form. Review and click Save Vendor.", "success");
+}
+
+function saveOcrVendor() {
+  if (!ocrExtractedRecord) return showAlert("Extract a business card first.", "error");
+  if (!confirm("Have you manually verified the OCR fields and corrected mistakes?")) return;
+  const vendor = readOcrReviewRecord();
+  const validation = validateVendor(vendor);
+  if (validation) return showAlert(validation, "error");
+  const duplicates = detectDuplicates(vendor);
+  if (duplicates.length && !confirm(`Possible duplicate vendor found:\n${duplicates.join("\n")}\n\nSave OCR vendor anyway?`)) return;
+  ensureOptionValues(vendor);
+  db.vendors.push({ ...vendor, id: uid(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  audit("Created", "Vendor from Business Card OCR", vendor.companyName);
+  saveLocal();
+  clearOcrReview(false);
+  populateStaticOptions();
+  renderAll();
+  showView("vendors");
+  showAlert("Verified OCR vendor saved.", "success");
+}
+
+function ensureOptionValues(vendor) {
+  if (vendor.category && !db.settings.categories.includes(vendor.category)) db.settings.categories.push(vendor.category);
+  if (vendor.vendorType && !db.settings.vendorTypes.includes(vendor.vendorType)) db.settings.vendorTypes.push(vendor.vendorType);
+  if (vendor.verificationStatus && !db.settings.verificationStatuses.includes(vendor.verificationStatus)) db.settings.verificationStatuses.push(vendor.verificationStatus);
+  if (vendor.lifecycleStatus && !db.settings.lifecycleStatuses.includes(vendor.lifecycleStatus)) db.settings.lifecycleStatuses.push(vendor.lifecycleStatus);
+}
+
+function clearOcrReview(clearFile = true) {
+  ocrExtractedRecord = null;
+  document.getElementById("ocrReviewPanel").classList.add("hidden");
+  document.getElementById("ocrReviewFields").innerHTML = "";
+  document.getElementById("ocrRawText").textContent = "";
+  if (clearFile) document.getElementById("ocrCardImage").value = "";
+  setOcrStatus("Waiting for an image.");
+}
+
+function setOcrStatus(message) {
+  const status = document.getElementById("ocrStatus");
+  if (status) status.textContent = message;
 }
 
 function renderVendors() {
